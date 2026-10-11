@@ -16,7 +16,8 @@ Usage:
   python3 logstats.py --model Qwen3.8   # only report requests attributed to a model
                                         # (substring match on the short name)
 
-With no PATH, searches ~/.lmstudio/scratchpads recursively.
+With no PATH, searches ~/.lmstudio/apps/bionic/server-logs recursively,
+falling back to ~/.lmstudio/scratchpads if that directory does not exist.
 Stdlib only.
 """
 
@@ -53,6 +54,18 @@ CTX_BUCKETS = [
     ("30-80K", 30_000, 80_000),
     (">80K", 80_000, float("inf")),
 ]
+
+# Canonical first; scratchpads is a mirror (same files) used as fallback.
+DEFAULT_ROOTS = [
+    ".lmstudio/apps/bionic/server-logs",
+    ".lmstudio/scratchpads",
+]
+
+
+def default_roots(home=None):
+    """Existing default search roots, canonical first."""
+    home = Path.home() if home is None else Path(home)
+    return [str(home / r) for r in DEFAULT_ROOTS if (home / r).is_dir()]
 
 
 # --- parsing ---------------------------------------------------------------
@@ -256,7 +269,12 @@ def main(argv):
         args = args[:i] + args[i + 2:]
     else:
         args = [a for a in args if a != "--json"]
-    paths = args or [str(Path.home() / ".lmstudio/scratchpads")]
+    paths = args or default_roots()
+    if not paths:
+        print("no default log directory found (looked for "
+              + ", ".join("~/" + r for r in DEFAULT_ROOTS) + ")",
+              file=sys.stderr)
+        return 1
 
     files = collect(paths)
     if not files:

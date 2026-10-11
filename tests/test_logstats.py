@@ -9,7 +9,7 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from logstats import parse_file, watch_items, to_json  # noqa: E402
+from logstats import parse_file, watch_items, to_json, default_roots  # noqa: E402
 
 SAMPLE = os.path.join(ROOT, "examples", "sample.log")
 
@@ -59,6 +59,25 @@ class TestJson(unittest.TestCase):
             self.assertIn(key, out)
         self.assertEqual(out["requests"], 3)
         self.assertEqual(out["output_tokens"], 3131 + 11 + 1636)
+
+
+class TestDefaultRoots(unittest.TestCase):
+    def test_canonical_first_with_fallback(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            # neither root exists yet
+            self.assertEqual(default_roots(td), [])
+            # only the fallback exists
+            os.makedirs(os.path.join(td, ".lmstudio", "scratchpads"))
+            self.assertEqual(default_roots(td),
+                             [os.path.join(td, ".lmstudio", "scratchpads")])
+            # both exist: canonical (server-logs) comes first
+            os.makedirs(os.path.join(td, ".lmstudio", "apps", "bionic",
+                                     "server-logs"))
+            self.assertEqual(default_roots(td),
+                             [os.path.join(td, ".lmstudio", "apps", "bionic",
+                                           "server-logs"),
+                              os.path.join(td, ".lmstudio", "scratchpads")])
 
 
 class TestCli(unittest.TestCase):

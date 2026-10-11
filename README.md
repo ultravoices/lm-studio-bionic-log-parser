@@ -9,7 +9,7 @@ Single file, standard library only, Python 3.9+. No dependencies, no network, no
 ## Quickstart
 
 ```bash
-python3 logstats.py                          # parse everything under ~/.lmstudio/scratchpads (recurses)
+python3 logstats.py                          # parse everything under ~/.lmstudio/apps/bionic/server-logs (recurses)
 python3 logstats.py <file> [file|dir ...]    # specific files or directories (dirs searched for *.log)
 python3 logstats.py --model A3B <file>       # only requests attributed to a model (substring match)
 python3 logstats.py --json <file>            # machine-readable summary
@@ -45,9 +45,10 @@ Failure detection matches engine-level patterns only; the word "error" appearing
 
 ## Where the logs live
 
-- Bionic harness logs: `~/.lmstudio/scratchpads/…` (the default search root)
+- Canonical location: `~/.lmstudio/apps/bionic/server-logs/<YYYY-MM>/YYYY-MM-DD.N.log` — the default search root
+- Bionic also mirrors copies under `~/.lmstudio/scratchpads/<session>/…` (used as a fallback when `server-logs` does not exist). Do **not** pass both roots in one run — the files are duplicates and requests would be double-counted
 - Per-project session data: `~/.lmstudio/apps/bionic/projects/<id>/.internal/ng-sessions.sqlite`
-- Splash engine internals (OOM, cache stats) appear interleaved in the same harness log files
+- Splash engine internals (OOM, cache stats) appear interleaved in the same server log files
 
 ## Privacy
 
