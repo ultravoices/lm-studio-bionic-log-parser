@@ -24,6 +24,7 @@ falling back to ~/.lmstudio/scratchpads if that directory does not exist.
 Stdlib only.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -122,9 +123,16 @@ DEFAULT_ROOTS = [
 
 
 def default_roots(home=None):
-    """Existing default search roots, canonical first."""
+    """Canonical server-logs dir if it exists; else the scratchpad mirror.
+
+    Never both: scratchpad copies are point-in-time snapshots (often stale
+    relative to the live server log), so mixing them double-counts requests.
+    """
     home = Path.home() if home is None else Path(home)
-    return [str(home / r) for r in DEFAULT_ROOTS if (home / r).is_dir()]
+    canonical = home / DEFAULT_ROOTS[0]
+    if canonical.is_dir():
+        return [str(canonical)]
+    return [str(home / r) for r in DEFAULT_ROOTS[1:] if (home / r).is_dir()]
 
 
 # --- parsing ---------------------------------------------------------------
@@ -298,6 +306,19 @@ def to_json(fs: dict):
     }
 
 
+def _fingerprint(p: Path):
+    """(size, md5) of a file, or None if unreadable."""
+    try:
+        size = p.stat().st_size
+        h = hashlib.md5()
+        with open(p, "rb") as fh:
+            while chunk := fh.read(1 << 20):
+                h.update(chunk)
+        return (size, h.hexdigest())
+    except OSError:
+        return None
+
+
 def collect(paths):
     out = []
     for p in paths:
@@ -308,12 +329,19 @@ def collect(paths):
             out.append(p)
         else:
             print(f"warn: {p} not found", file=sys.stderr)
-    # dedupe, preserve order
-    seen, files = set(), []
+    # dedupe by path, then by content (mirror copies of the same file),
+    # preserving order
+    seen_paths, seen_content, files = set(), set(), []
     for f in out:
-        if str(f) not in seen:
-            seen.add(str(f))
-            files.append(f)
+        if str(f) in seen_paths:
+            continue
+        seen_paths.add(str(f))
+        fp = _fingerprint(f)
+        if fp is not None:
+            if fp in seen_content:
+                continue
+            seen_content.add(fp)
+        files.append(f)
     return files
 
 

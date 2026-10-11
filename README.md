@@ -49,7 +49,7 @@ Failure detection matches engine-level patterns only; the word "error" appearing
 ## Where the logs live
 
 - Canonical location: `~/.lmstudio/apps/bionic/server-logs/<YYYY-MM>/YYYY-MM-DD.N.log` — the default search root
-- Bionic also mirrors copies under `~/.lmstudio/scratchpads/<session>/…` (used as a fallback when `server-logs` does not exist). Do **not** pass both roots in one run — the files are duplicates and requests would be double-counted
+- Bionic also mirrors copies under `~/.lmstudio/scratchpads/<session>/…`. These are point-in-time snapshots and can be stale relative to the live server log, so the tool searches only `server-logs` by default (scratchpads is used only if `server-logs` is absent). Byte-identical copies passed explicitly are deduped by content hash, but stale snapshots are distinct files and **would** double-count — prefer `server-logs`
 - Per-project session data: `~/.lmstudio/apps/bionic/projects/<id>/.internal/ng-sessions.sqlite`
 - Splash engine internals (OOM, cache stats) appear interleaved in the same server log files
 

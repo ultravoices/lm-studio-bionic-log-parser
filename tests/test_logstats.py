@@ -64,22 +64,21 @@ class TestJson(unittest.TestCase):
 
 
 class TestDefaultRoots(unittest.TestCase):
-    def test_canonical_first_with_fallback(self):
+    def test_fallback_only_when_canonical_missing(self):
         import tempfile
         with tempfile.TemporaryDirectory() as td:
             # neither root exists yet
             self.assertEqual(default_roots(td), [])
-            # only the fallback exists
+            # only the fallback (scratchpad mirror) exists
             os.makedirs(os.path.join(td, ".lmstudio", "scratchpads"))
             self.assertEqual(default_roots(td),
                              [os.path.join(td, ".lmstudio", "scratchpads")])
-            # both exist: canonical (server-logs) comes first
+            # both exist: canonical only (mixing double-counts requests)
             os.makedirs(os.path.join(td, ".lmstudio", "apps", "bionic",
                                      "server-logs"))
             self.assertEqual(default_roots(td),
                              [os.path.join(td, ".lmstudio", "apps", "bionic",
-                                           "server-logs"),
-                              os.path.join(td, ".lmstudio", "scratchpads")])
+                                           "server-logs")])
 
 
 class TestBuckets(unittest.TestCase):
@@ -129,6 +128,24 @@ class TestCli(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("ctx <8K", proc.stdout)
         self.assertIn("ctx 8-64K", proc.stdout)
+
+    def test_collect_dedupes_identical_copies(self):
+        import shutil
+        import tempfile
+        from logstats import collect
+        with tempfile.TemporaryDirectory() as td:
+            a = os.path.join(td, "a")
+            b = os.path.join(td, "b")
+            for d in (a, b):
+                os.makedirs(d)
+                shutil.copy(SAMPLE, os.path.join(d, "2026-10-01.1.log"))
+            # two *different* files must both survive
+            with open(os.path.join(b, "2026-10-02.1.log"), "w") as fh:
+                fh.write("distinct content\n")
+            files = collect([a, b])
+            self.assertEqual(len(files), 2)
+            self.assertEqual({f.name for f in files},
+                             {"2026-10-01.1.log", "2026-10-02.1.log"})
 
     def test_bad_buckets_flag_errors(self):
         proc = subprocess.run(
