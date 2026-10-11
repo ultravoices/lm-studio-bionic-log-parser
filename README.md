@@ -12,6 +12,9 @@ Single file, standard library only, Python 3.9+. No dependencies, no network, no
 python3 logstats.py                          # parse everything under ~/.lmstudio/apps/bionic/server-logs (recurses)
 python3 logstats.py <file> [file|dir ...]    # specific files or directories (dirs searched for *.log)
 python3 logstats.py --model A3B <file>       # only requests attributed to a model (substring match)
+python3 logstats.py --buckets 16k,32k,64k,128k,256k <file>
+                                             # custom context bucket edges (k/m suffix
+                                             # or bare token counts; last bucket to ∞)
 python3 logstats.py --json <file>            # machine-readable summary
 ```
 
@@ -21,10 +24,10 @@ Example output:
 == 2026-10-11.1.log  (45 KB)  models: Qwen3.8-27B-Splash, Qwen3.6-35B-A3B-Splash
   313 reqs · 137,494 out · peak ctx 115,415 · cached 93% · loads 5 stops 5
   Qwen3.6-35B-A3B-Splash  mean  199.1  min   88.8  max  315.5  n=230
-    ctx 8-30K   mean  163.1  min  131.7  max  254.3  n=17
-    ctx 30-80K  mean  204.6  min  101.9  max  315.5  n=135
+    ctx 8-16K     mean  163.1  min  131.7  max  254.3  n=17
+    ctx 32-64K    mean  204.6  min  101.9  max  315.5  n=135
   Qwen3.8-27B-Splash      mean   67.0  min   32.8  max  134.1  n=83
-    ctx >80K    mean   64.4  min   38.2  max   91.7  n=37
+    ctx 128-256K mean   64.4  min   38.2  max   91.7  n=37
 ```
 
 ## What it reports
@@ -32,7 +35,7 @@ Example output:
 Per file:
 
 - **Volume** — request count, total output tokens, peak context, prefix-cache hit fraction, load/stop counts
-- **Speed** — per-model `tok/s` (mean/min/max) overall and in context buckets (`<8K`, `8-30K`, `30-80K`, `>80K`)
+- **Speed** — per-model `tok/s` (mean/min/max) overall and in context buckets (default edges: `<4K`, `4-8K`, `8-16K`, `16-32K`, `32-64K`, `64-128K`, `128-256K`, `>256K`; override with `--buckets 16k,32k,64k,…`)
 - **Cache** — prompt-cache disk usage vs cap, record count, restore efficiency
 - **WATCH flags**, auto-detected:
   - GPU out-of-memory (`kIOGPUCommandBufferCallbackErrorOutOfMemory`)
@@ -79,6 +82,8 @@ python3 -m unittest discover -s tests -v   # stdlib-only test suite
 [..][coordinator][INFO] Prompt cache restore: … lifetime_efficiency=…%
 [..][ERROR] / RuntimeError / OutOfMemory   engine failures
 ```
+
+Bucket rows are only shown for requests with ≥100 output tokens (short tool-loop requests don't meaningfully exercise the context).
 
 Requests occurring before a file's first `Loading` line are attributed to the file's sole model when exactly one model appears in it; otherwise they are reported as `?`.
 

@@ -9,7 +9,9 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from logstats import parse_file, watch_items, to_json, default_roots  # noqa: E402
+from logstats import (parse_file, watch_items, to_json, default_roots,
+                      parse_bucket_spec, build_buckets,  # noqa: E402
+                      DEFAULT_BUCKET_EDGES)
 
 SAMPLE = os.path.join(ROOT, "examples", "sample.log")
 
@@ -80,6 +82,34 @@ class TestDefaultRoots(unittest.TestCase):
                               os.path.join(td, ".lmstudio", "scratchpads")])
 
 
+class TestBuckets(unittest.TestCase):
+    def test_parse_spec_k_and_m(self):
+        bs = parse_bucket_spec("4k,8k,1m")
+        self.assertEqual(bs,
+                         [("<4K", 0, 4000),
+                          ("4-8K", 4000, 8000),
+                          ("8K-1M", 8000, 1_000_000),
+                          (">1M", 1_000_000, float("inf"))])
+
+    def test_parse_bare_ints(self):
+        bs = parse_bucket_spec("100,100000")
+        self.assertEqual(bs[0], ("<100", 0, 100))
+        self.assertEqual(bs[1], ("100-100K", 100, 100_000))
+
+    def test_parse_rejects_bad_spec(self):
+        self.assertIsNone(parse_bucket_spec("4k,2k"))   # not increasing
+        self.assertIsNone(parse_bucket_spec("abc"))
+        self.assertIsNone(parse_bucket_spec("0k,4k"))
+        self.assertIsNone(parse_bucket_spec(""))
+
+    def test_defaults_reach_256k(self):
+        bs = build_buckets(DEFAULT_BUCKET_EDGES)
+        self.assertEqual([b[0] for b in bs],
+                         ["<4K", "4-8K", "8-16K", "16-32K", "32-64K",
+                          "64-128K", "128-256K", ">256K"])
+        self.assertEqual(bs[-1][2], float("inf"))
+
+
 class TestCli(unittest.TestCase):
     def test_main_with_model_filter(self):
         """--model must not crash on files with unattributed requests."""
@@ -89,6 +119,24 @@ class TestCli(unittest.TestCase):
             capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("3 reqs", proc.stdout)
+
+    def test_buckets_flag(self):
+        """--buckets overrides the default edges in the report."""
+        proc = subprocess.run(
+            [sys.executable, os.path.join(ROOT, "logstats.py"),
+             "--buckets", "8k,64k", SAMPLE],
+            capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("ctx <8K", proc.stdout)
+        self.assertIn("ctx 8-64K", proc.stdout)
+
+    def test_bad_buckets_flag_errors(self):
+        proc = subprocess.run(
+            [sys.executable, os.path.join(ROOT, "logstats.py"),
+             "--buckets", "nope", SAMPLE],
+            capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("bad --buckets", proc.stderr)
 
     def test_json_flag(self):
         proc = subprocess.run(

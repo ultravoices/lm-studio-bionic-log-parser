@@ -15,6 +15,9 @@ Usage:
   python3 logstats.py --json [PATH ...] # machine-readable
   python3 logstats.py --model Qwen3.8   # only report requests attributed to a model
                                         # (substring match on the short name)
+  python3 logstats.py --buckets 16k,32k,64k,128k,256k
+                                        # custom context bucket edges (k/m suffix or
+                                        # bare token counts; last bucket runs to infinity)
 
 With no PATH, searches ~/.lmstudio/apps/bionic/server-logs recursively,
 falling back to ~/.lmstudio/scratchpads if that directory does not exist.
@@ -48,12 +51,68 @@ ERR_PATTERNS = [
     ("failure", re.compile(r"Failed to \w+")),
 ]
 
-CTX_BUCKETS = [
-    ("<8K", 0, 8_000),
-    ("8-30K", 8_000, 30_000),
-    ("30-80K", 30_000, 80_000),
-    (">80K", 80_000, float("inf")),
-]
+# Context-size bucket edges (input token counts); the final bucket runs to
+# infinity. Override with --buckets (see parse_bucket_spec).
+DEFAULT_BUCKET_EDGES = [4_000, 8_000, 16_000, 32_000, 64_000, 128_000, 256_000]
+
+
+def _unit(n):
+    if n >= 1_000_000:
+        return "M", 1_000_000
+    if n >= 1_000:
+        return "K", 1_000
+    return "", 1
+
+
+def _fmt_edge(n):
+    u, s = _unit(n)
+    return f"{n / s:g}{u}" if u else str(n)
+
+
+def _fmt_range(lo, hi):
+    """Label a [lo, hi) range: '4-8K', '8K-1M', '<4K', '100-100K', '>256K'."""
+    if hi == float("inf"):
+        return f">{_fmt_edge(lo)}"
+    if lo == 0:
+        return f"<{_fmt_edge(hi)}"
+    su, sm = _unit(hi)
+    if lo >= sm:
+        return f"{lo / sm:g}-{hi / sm:g}{su}"
+    return f"{_fmt_edge(lo)}-{hi / sm:g}{su}"
+
+
+def build_buckets(edges):
+    """Edge list -> [(label, lo, hi), ...]; the last bucket is open-ended."""
+    out, prev = [], 0
+    for e in edges:
+        out.append((_fmt_range(prev, e), prev, e))
+        prev = e
+    out.append((f">{_fmt_edge(prev)}", prev, float("inf")))
+    return out
+
+
+def parse_bucket_spec(spec):
+    """Parse '4k,8k,16k' / '256k,1m' / bare ints into buckets; None if malformed."""
+    try:
+        edges = []
+        for part in spec.split(","):
+            p = part.strip().lower()
+            if not p:
+                return None
+            mult = 1
+            if p.endswith("k"):
+                mult, p = 1_000, p[:-1]
+            elif p.endswith("m"):
+                mult, p = 1_000_000, p[:-1]
+            v = int(float(p)) * mult
+            if v <= 0:
+                return None
+            edges.append(v)
+    except ValueError:
+        return None
+    if not edges or any(a >= b for a, b in zip(edges, edges[1:])):
+        return None
+    return build_buckets(edges)
 
 # Canonical first; scratchpads is a mirror (same files) used as fallback.
 DEFAULT_ROOTS = [
@@ -184,7 +243,7 @@ def watch_items(fs: dict):
     return items
 
 
-def report(fs: dict, model_filter=None, indent="  "):
+def report(fs: dict, model_filter=None, indent="  ", buckets=None):
     reqs = [r for r in fs["requests"]
             if not model_filter or model_filter.lower() in (r["model"] or "").lower()]
     if not reqs:
@@ -208,10 +267,10 @@ def report(fs: dict, model_filter=None, indent="  "):
         big = [r["tps"] for r in rs if r["output"] >= 100]
         print(f"{indent}{m:20s} {fstat([r['tps'] for r in rs])}")
         if big:
-            for label, lo, hi in CTX_BUCKETS:
+            for label, lo, hi in buckets or build_buckets(DEFAULT_BUCKET_EDGES):
                 b = [r["tps"] for r in rs if r["output"] >= 100 and lo <= r["input"] < hi]
                 if b:
-                    print(f"{indent}  ctx {label:6s} {fstat(b)}")
+                    print(f"{indent}  ctx {label:9s} {fstat(b)}")
 
     for w in watch_items(fs):
         print(f"{indent}WATCH: {w}")
@@ -262,11 +321,23 @@ def main(argv):
     args = argv[1:]
     as_json = "--json" in args
     model_filter = None
-    if "--model" in args:
-        i = args.index("--model")
-        if i + 1 < len(args):
-            model_filter = args[i + 1]
-        args = args[:i] + args[i + 2:]
+    buckets = None
+    if "--model" in args or "--buckets" in args:
+        if "--model" in args:
+            i = args.index("--model")
+            if i + 1 < len(args):
+                model_filter = args[i + 1]
+            args = args[:i] + args[i + 2:]
+        if "--buckets" in args:
+            i = args.index("--buckets")
+            if i + 1 < len(args):
+                buckets = parse_bucket_spec(args[i + 1])
+                if buckets is None:
+                    print("bad --buckets spec (want e.g. 16k,32k,64k,128k,256k)",
+                          file=sys.stderr)
+                    return 1
+            args = args[:i] + args[i + 2:]
+        args = [a for a in args if a != "--json"]
     else:
         args = [a for a in args if a != "--json"]
     paths = args or default_roots()
@@ -286,7 +357,7 @@ def main(argv):
         if as_json:
             print(json.dumps(to_json(fs)))
         else:
-            report(fs, model_filter)
+            report(fs, model_filter, buckets=buckets)
             if f is not files[-1]:
                 print()
     return 0
