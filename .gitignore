@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Real session logs must never be committed (they contain conversation content)
+*.log
+!examples/sample.log
+
+# OS
+.DS_Store
