@@ -7,6 +7,7 @@
 [2026-10-01 09:05:02][DEBUG][cache_io_thread][ERROR]: Failed to commit pending prompt cache save:
 RuntimeError: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory).
 [2026-10-01 09:05:10][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=169216 uncached_tokens=595 lifetime_efficiency=95.59%
-[2026-10-01 09:05:12][DEBUG][cache_store][INFO]: VLM prompt cache disk usage: used_mib=116712.0 cap_mib=166720.0 lifetime_evicted_mib=0.0 records=1996
+[2026-10-01 09:05:12][DEBUG][cache_store][INFO]: VLM prompt cache disk usage: used_mib=116712.0 cap_mib=166720.0 lifetime_evicted_mib=0.0 records=1996 lifetime=model_load
+[2026-10-01 10:05:12][DEBUG][cache_store][INFO]: VLM prompt cache disk usage: used_mib=166720.0 cap_mib=166720.0 lifetime_evicted_mib=435943.0 records=2929 lifetime=model_load
 [2026-10-01 09:10:00][DEBUG] 09:10:00 Stopping · releasing engine resources
 [2026-10-01 09:10:00][INFO] Server stopped.
