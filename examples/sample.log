@@ -1,0 +1,12 @@
+[2026-10-01 09:00:01][DEBUG] 09:00:01 Loading · incoai/Qwen3.8-27B-Splash
+[2026-10-01 09:00:01][DEBUG] 09:00:01 Kernel policy for GPU family 10 with 40 cores.
+[2026-10-01 09:00:09][DEBUG] 09:00:09 Ready · incoai/Qwen3.8-27B-Splash · context 256K · http://127.0.0.1:55130
+[2026-10-01 09:01:12][DEBUG] 09:01:12 Done · input 6,543 · cached 0 · output 3,131 · tools 26·9e028797 · TTFT 6.8s · 58.5 tok/s
+[2026-10-01 09:02:01][DEBUG] 09:02:01 Done · input 72 · cached 0 · output 11 · TTFT 0.2s · 78.6 tok/s
+[2026-10-01 09:03:40][DEBUG] 09:03:40 Done · input 23,625 · cached 6,528 · output 1,636 · tools 26·9e028797 · TTFT 19.6s · 56.9 tok/s
+[2026-10-01 09:05:02][DEBUG][cache_io_thread][ERROR]: Failed to commit pending prompt cache save:
+RuntimeError: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory).
+[2026-10-01 09:05:10][DEBUG][coordinator][INFO]: Prompt cache restore: cached_tokens=169216 uncached_tokens=595 lifetime_efficiency=95.59%
+[2026-10-01 09:05:12][DEBUG][cache_store][INFO]: VLM prompt cache disk usage: used_mib=116712.0 cap_mib=166720.0 lifetime_evicted_mib=0.0 records=1996
+[2026-10-01 09:10:00][DEBUG] 09:10:00 Stopping · releasing engine resources
+[2026-10-01 09:10:00][INFO] Server stopped.
