@@ -41,7 +41,10 @@ RE_DONE = re.compile(
     r".*?TTFT ([\d.]+)s \u00b7 ([\d.]+) tok/s"
 )
 RE_STOP = re.compile(r"Stopping|Server stopped")
-RE_CACHE_DISK = re.compile(r"used_mib=([\d.]+)\s+cap_mib=([\d.]+)(?:.*?records=(\d+))?")
+RE_CACHE_DISK = re.compile(
+    r"used_mib=([\d.]+)\s+cap_mib=([\d.]+)\s+lifetime_evicted_mib=([\d.]+)"
+    r"(?:.*?records=(\d+))?"
+)
 RE_CACHE_RESTORE = re.compile(r"lifetime_efficiency=([\d.]+)%")
 
 # Engine-level failure patterns (content dumps like {"error": ...} are ignored).
@@ -143,7 +146,7 @@ def parse_file(path) -> dict:
     models, loads, stops = [], 0, 0
     cur_model = None
     err_counts = {}
-    cache_used = cache_cap = cache_records = None
+    cache_used = cache_cap = cache_records = cache_evicted = None
     cache_eff = None
     load_times = []
 
@@ -174,11 +177,15 @@ def parse_file(path) -> dict:
                     break  # one bucket per line
             m = RE_CACHE_DISK.search(line)
             if m:
-                u, c2 = float(m.group(1)), float(m.group(2))
-                if cache_cap is None or c2 > cache_cap:
-                    cache_used, cache_cap = u, c2
-                if m.group(3):
-                    cache_records = max(cache_records or 0, int(m.group(3)))
+                u, c2, ev = (float(m.group(1)), float(m.group(2)),
+                             float(m.group(3)))
+                # per-lifetime counters: max across lines == max within one
+                # lifetime (counters reset to 0 on each model load)
+                cache_cap = max(cache_cap or 0, c2) or None
+                cache_used = max(cache_used or 0, u) or None
+                cache_evicted = max(cache_evicted or 0, ev) or None
+                if m.group(4):
+                    cache_records = max(cache_records or 0, int(m.group(4)))
             m = RE_CACHE_RESTORE.search(line)
             if m:
                 cache_eff = max(cache_eff or 0.0, float(m.group(1)))
@@ -202,6 +209,7 @@ def parse_file(path) -> dict:
         "cache": {
             "used_gib": round(cache_used / 1024, 1) if cache_used else None,
             "cap_gib": round(cache_cap / 1024, 1) if cache_cap else None,
+            "evicted_gib": round(cache_evicted / 1024, 1) if cache_evicted else None,
             "records": cache_records,
             "restore_eff_pct": round(cache_eff, 2) if cache_eff else None,
         },
@@ -235,6 +243,9 @@ def watch_items(fs: dict):
         if frac > 0.5:
             items.append(f"prompt-cache disk at {frac:.0%} of cap "
                          f"({c['used_gib']:.0f}/{c['cap_gib']:.0f} GiB)")
+    if (c["evicted_gib"] or 0) > 10:
+        items.append(f"prompt-cache evicted {c['evicted_gib']:.0f} GiB "
+                     f"(eviction churn — cache was at its disk cap)")
     slow = [r for r in fs["requests"] if r["tps"] < 30]
     if slow:
         items.append(f"{len(slow)} request(s) below 30 tok/s "

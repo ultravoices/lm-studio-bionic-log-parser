@@ -36,7 +36,7 @@ Per file:
 
 - **Volume** — request count, total output tokens, peak context, prefix-cache hit fraction, load/stop counts
 - **Speed** — per-model `tok/s` (mean/min/max) overall and in context buckets (default edges: `<4K`, `4-8K`, `8-16K`, `16-32K`, `32-64K`, `64-128K`, `128-256K`, `>256K`; override with `--buckets 16k,32k,64k,…`)
-- **Cache** — prompt-cache disk usage vs cap, record count, restore efficiency
+- **Cache** — peak prompt-cache disk usage vs cap, eviction volume (GiB), record count, restore efficiency
 - **WATCH flags**, auto-detected:
   - GPU out-of-memory (`kIOGPUCommandBufferCallbackErrorOutOfMemory`)
   - engine-level errors / runtime errors / failed operations
@@ -78,10 +78,12 @@ python3 -m unittest discover -s tests -v   # stdlib-only test suite
 [..] Ready · <org/model> · context 256K …  engine ready
 [..] Done · input N · cached N · output N · tools … · TTFT Ns · N tok/s
 [..] Stopping · releasing engine resources / Server stopped
-[..][cache_store][INFO] VLM prompt cache disk usage: used_mib=… cap_mib=… records=…
+[..][cache_store][INFO] VLM prompt cache disk usage: used_mib=… cap_mib=… lifetime_evicted_mib=… records=…
 [..][coordinator][INFO] Prompt cache restore: … lifetime_efficiency=…%
 [..][ERROR] / RuntimeError / OutOfMemory   engine failures
 ```
+
+`lifetime_*` counters reset on each model load; reported values are the maximum seen within a single lifetime.
 
 Bucket rows are only shown for requests with ≥100 output tokens (short tool-loop requests don't meaningfully exercise the context).
 

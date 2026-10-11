@@ -44,12 +44,15 @@ class TestParse(unittest.TestCase):
         self.assertGreaterEqual(self.fs["errors"].get("engine_error", 0), 1)
 
     def test_cache_stats_and_watch(self):
-        self.assertAlmostEqual(self.fs["cache"]["used_gib"], 114.0, delta=1)
-        self.assertAlmostEqual(self.fs["cache"]["cap_gib"], 163.0, delta=1)
+        # peak used across the file's lifetime samples, not the first sample
+        self.assertAlmostEqual(self.fs["cache"]["used_gib"], 162.8, delta=0.1)
+        self.assertAlmostEqual(self.fs["cache"]["cap_gib"], 162.8, delta=0.1)
+        self.assertAlmostEqual(self.fs["cache"]["evicted_gib"], 425.7, delta=0.1)
         self.assertAlmostEqual(self.fs["cache"]["restore_eff_pct"], 95.59, delta=0.01)
         watch = watch_items(self.fs)
         self.assertTrue(any("GPU OOM" in w for w in watch))
-        self.assertTrue(any("prompt-cache disk at 70%" in w for w in watch))
+        self.assertTrue(any("prompt-cache disk at 100%" in w for w in watch))
+        self.assertTrue(any("eviction churn" in w for w in watch))
 
 
 class TestJson(unittest.TestCase):
@@ -59,6 +62,8 @@ class TestJson(unittest.TestCase):
         for key in ("models", "requests", "output_tokens", "peak_context",
                     "per_model", "errors", "cache", "watch"):
             self.assertIn(key, out)
+        for key in ("used_gib", "cap_gib", "evicted_gib"):
+            self.assertIn(key, out["cache"])
         self.assertEqual(out["requests"], 3)
         self.assertEqual(out["output_tokens"], 3131 + 11 + 1636)
 
